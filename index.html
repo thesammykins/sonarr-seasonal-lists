@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Seasonal Anime Lists</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: #0d1117; color: #c9d1d9;
+    min-height: 100vh; padding: 30px;
+    display: flex; gap: 30px; justify-content: center; align-items: flex-start;
+  }
+  .sidebar {
+    background: #161b22; border: 1px solid #30363d; border-radius: 12px;
+    padding: 28px; width: 340px; flex-shrink: 0;
+    position: sticky; top: 30px;
+  }
+  .sidebar h2 { font-size: 16px; margin-bottom: 16px; }
+  .sidebar ol { padding-left: 20px; font-size: 13px; line-height: 1.8; color: #8b949e; }
+  .sidebar ol li { margin-bottom: 6px; }
+  .sidebar code {
+    background: #0d1117; padding: 2px 6px; border-radius: 4px;
+    font-size: 12px; color: #c9d1d9;
+  }
+  .main { max-width: 780px; width: 100%; }
+  h1 { font-size: 24px; margin-bottom: 4px; }
+  .sub { color: #8b949e; font-size: 14px; margin-bottom: 24px; }
+  .controls { display: flex; gap: 12px; margin-bottom: 24px; flex-wrap: wrap; }
+  select {
+    padding: 10px 14px; border-radius: 8px;
+    background: #0d1117; color: #c9d1d9; border: 1px solid #30363d;
+    font-size: 14px; cursor: pointer; flex: 1; min-width: 140px;
+  }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
+  .box {
+    background: #161b22; border: 1px solid #30363d; border-radius: 10px;
+    padding: 18px; display: flex; flex-direction: column; gap: 10px;
+  }
+  .box-label { font-size: 13px; font-weight: 600; color: #8b949e; text-transform: uppercase; letter-spacing: 0.5px; }
+  .box .btn {
+    padding: 8px 14px; border-radius: 6px; border: none;
+    font-size: 13px; font-weight: 600; cursor: pointer; text-align: center;
+    background: #238636; color: #fff; transition: background 0.15s;
+  }
+  .box .btn:hover { background: #2ea043; }
+  .box .btn:active { background: #1e7e34; }
+  .box .btn.copied-btn { background: #1f6feb; }
+  .badge {
+    display: inline-block; padding: 2px 8px; border-radius: 4px;
+    font-size: 10px; font-weight: 700; letter-spacing: 0.3px;
+  }
+  .badge-sonarr { background: #1f6feb; color: #fff; }
+  .badge-new { background: #da3633; color: #fff; }
+  .toast {
+    position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+    background: #30363d; color: #c9d1d9; padding: 10px 20px;
+    border-radius: 8px; font-size: 13px; display: none;
+    border: 1px solid #484f58;
+  }
+  @media (max-width: 800px) {
+    body { flex-direction: column; padding: 16px; gap: 16px; }
+    .sidebar { width: 100%; position: static; }
+  }
+</style>
+</head>
+<body>
+
+<div class="sidebar">
+  <h2>How to use in Sonarr</h2>
+  <ol>
+    <li>Go to <strong>Settings → Import Lists</strong></li>
+    <li>Click <strong>Add List</strong> → <strong>Custom List</strong></li>
+    <li>Paste one of the URLs from the boxes</li>
+    <li>Set <strong>Monitor</strong> to your preference</li>
+    <li>Click <strong>Save</strong> — Sonarr will import on its next sync</li>
+  </ol>
+  <p style="margin-top:16px;font-size:12px;color:#484f58;">
+    Lists update weekly. The <code style="font-size:11px;">-new</code> variants exclude sequels and spin-offs.
+  </p>
+</div>
+
+<div class="main">
+  <h1>Seasonal Anime Lists</h1>
+  <p class="sub">Sonarr-compatible lists generated from AniList data.</p>
+
+  <div class="controls">
+    <select id="year">
+      <option value="2024">2024</option>
+      <option value="2023">2023</option>
+      <option value="2022">2022</option>
+      <option value="2021">2021</option>
+      <option value="2020">2020</option>
+      <option value="2019">2019</option>
+      <option value="2015">2015</option>
+      <option value="2014">2014</option>
+      <option value="2013">2013</option>
+      <option value="2012">2012</option>
+      <option value="2011">2011</option>
+      <option value="2010">2010</option>
+      <option value="2026">2026</option>
+      <option value="2027">2027</option>
+    </select>
+  </div>
+
+  <div class="grid" id="grid"></div>
+</div>
+
+<div class="toast" id="toast">Copied to clipboard</div>
+
+<script>
+const base = 'https://lists.calmcacil.dev';
+const yearSel = document.getElementById('year');
+const grid = document.getElementById('grid');
+const toast = document.getElementById('toast');
+
+const seasonDefs = [
+    {label: 'Winter', key: 'winter', suffix: ''},
+    {label: 'Spring', key: 'spring', suffix: ''},
+    {label: 'Summer', key: 'summer', suffix: ''},
+    {label: 'Fall', key: 'fall', suffix: ''},
+    {label: 'New', key: 'winter', suffix: '-new'},
+    {label: 'New', key: 'spring', suffix: '-new'},
+    {label: 'New', key: 'summer', suffix: '-new'},
+    {label: 'New', key: 'fall', suffix: '-new'},
+    {label: 'Full Year', key: 'all', suffix: ''},
+    {label: 'Full Year (New)', key: 'all', suffix: '-new'},
+  ];
+
+function buildGrid() {
+  var y = yearSel.value;
+  var h = '';
+  for (var i = 0; i < 4; i++) {
+    var s = seasonDefs[i];
+    var url = base + '/' + y + '/' + s.key + '-series' + s.suffix + '.json';
+    h += '<div class=\"box\"><div style=\"display:flex;justify-content:space-between;align-items:center\"><span class=\"box-label\">' + s.label + ' Series</span><span class=\"badge badge-sonarr\">Sonarr</span></div><button class=\"btn\" onclick=\"copyUrl(\'' + url + '\')\">Copy URL</button></div>';
+  }
+  for (var i = 4; i < 8; i++) {
+    var s = seasonDefs[i];
+    var url = base + '/' + y + '/' + s.key + '-series' + s.suffix + '.json';
+    h += '<div class=\"box\"><div style=\"display:flex;justify-content:space-between;align-items:center\"><span class=\"box-label\">' + s.label + ' Series</span><span><span class=\"badge badge-sonarr\">Sonarr</span> <span class=\"badge badge-new\">New</span></span></div><button class=\"btn\" onclick=\"copyUrl(\'' + url + '\')\">Copy URL</button></div>';
+  }
+  for (var i = 8; i < 10; i++) {
+    var s = seasonDefs[i];
+    var url = base + '/' + y + '/' + s.suffix + '.json';
+    var label = s.label + ' Series';
+    var badge = '<span class=\"badge badge-sonarr\">Sonarr</span>';
+    if (i === 9) badge += ' <span class=\"badge badge-new\">New</span>';
+    h += '<div class=\"box\"><div style=\"display:flex;justify-content:space-between;align-items:center\"><span class=\"box-label\">' + label + '</span><span>' + badge + '</span></div><button class=\"btn\" onclick=\"copyUrl(\'' + url + '\')\">Copy URL</button></div>';
+  }
+  grid.innerHTML = h;
+}
+
+function copyUrl(url) {
+  navigator.clipboard.writeText(url);
+  toast.style.display = 'block';
+  setTimeout(() => { toast.style.display = 'none'; }, 2000);
+}
+
+yearSel.addEventListener('change', buildGrid);
+buildGrid();
+</script>
+</body>
+</html>
