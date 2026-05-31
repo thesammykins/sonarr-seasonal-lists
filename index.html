@@ -41,6 +41,8 @@
     margin-bottom: 12px; margin-top: 20px;
   }
   .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; }
+  .grid:empty { display: none; }
+  .grid.single { grid-template-columns: minmax(230px, 320px); justify-content: center; }
   .box {
     background: #161b22; border: 1px solid #30363d; border-radius: 10px;
     padding: 16px; display: flex; flex-direction: column; gap: 10px;
@@ -146,7 +148,7 @@ var seasonLabels = ['Winter','Spring','Summer','Fall'];
 
 function buildGrid() {
   var y = yearSel.value;
-  var now = 2026;
+  var now = new Date().getFullYear();
   var isNextYear = parseInt(y) === now + 1;
   var count = isNextYear ? 1 : 4;
 
@@ -164,6 +166,7 @@ function buildGrid() {
       + '</div></div>';
   }
   seasonGrid.innerHTML = sh;
+  seasonGrid.className = 'grid' + (count === 1 ? ' single' : '');
 
   if (!isNextYear) {
     var url = base + '/' + y + '/series.json';
@@ -174,8 +177,10 @@ function buildGrid() {
       + '<button class=\"btn btn-copy\" onclick=\"copyUrl(\'' + url + '\')\">Copy URL</button>'
       + '<button class=\"btn btn-new\" onclick=\"copyUrl(\'' + urlNew + '\')\">New only</button>'
       + '</div></div>';
+    yearGrid.className = 'grid';
   } else {
     yearGrid.innerHTML = '';
+    yearGrid.className = 'grid';
   }
 }
 
