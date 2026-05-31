@@ -163,11 +163,11 @@ function buildGrid() {
     var lbl = seasonLabels[i];
     var url = base + '/' + y + '/' + k + '-series.json';
     var urlNew = base + '/' + y + '/' + k + '-series-new.json';
-    sh += '<div class=\"box\">'
-      + '<div class=\"hdr\"><span class=\"lbl\">' + lbl + '</span><span class=\"badge badge-sonarr\">Sonarr</span></div>'
-      + '<div class=\"btn-row\">'
-      + '<button class=\"btn btn-copy\" onclick=\"copyUrl(\'' + url + '\')\">Copy URL</button>'
-      + '<button class=\"btn btn-new\" onclick=\"copyUrl(\'' + urlNew + '\')\">New only</button>'
+    sh += '<div class="box">'
+      + '<div class="hdr"><span class="lbl">' + lbl + '</span><span class="badge badge-sonarr">Sonarr</span></div>'
+      + '<div class="btn-row">'
+      + '<button class="btn btn-copy" onclick="copyUrl(\'' + url + '\')">Copy URL</button>'
+      + '<button class="btn btn-new" onclick="copyUrl(\'' + urlNew + '\')">New only</button>'
       + '</div></div>';
   }
   seasonGrid.innerHTML = sh;
@@ -176,11 +176,11 @@ function buildGrid() {
   if (!isNextYear) {
     var url = base + '/' + y + '/series.json';
     var urlNew = base + '/' + y + '/series-new.json';
-    yearGrid.innerHTML = '<div class=\"box\">'
-      + '<div class=\"hdr\"><span class=\"lbl\">' + y + ' Full Year</span><span class=\"badge badge-sonarr\">Sonarr</span></div>'
-      + '<div class=\"btn-row\">'
-      + '<button class=\"btn btn-copy\" onclick=\"copyUrl(\'' + url + '\')\">Copy URL</button>'
-      + '<button class=\"btn btn-new\" onclick=\"copyUrl(\'' + urlNew + '\')\">New only</button>'
+    yearGrid.innerHTML = '<div class="box">'
+      + '<div class="hdr"><span class="lbl">' + y + ' Full Year</span><span class="badge badge-sonarr">Sonarr</span></div>'
+      + '<div class="btn-row">'
+      + '<button class="btn btn-copy" onclick="copyUrl(\'' + url + '\')">Copy URL</button>'
+      + '<button class="btn btn-new" onclick="copyUrl(\'' + urlNew + '\')">New only</button>'
       + '</div></div>';
     yearGrid.className = 'grid year';
   } else {
