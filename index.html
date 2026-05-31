@@ -40,9 +40,14 @@
     text-transform: uppercase; letter-spacing: 0.5px;
     margin-bottom: 12px; margin-top: 20px;
   }
-  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; }
+  .grid { display: grid; gap: 12px; }
+  .grid.seasons { grid-template-columns: 1fr 1fr; }
+  .grid.year { grid-template-columns: minmax(230px, 1fr); }
+  .grid.single { max-width: 320px; }
   .grid:empty { display: none; }
-  .grid.single { grid-template-columns: minmax(230px, 320px); justify-content: center; }
+  @media (max-width: 500px) {
+    .grid.seasons { grid-template-columns: 1fr; }
+  }
   .box {
     background: #161b22; border: 1px solid #30363d; border-radius: 10px;
     padding: 16px; display: flex; flex-direction: column; gap: 10px;
@@ -166,7 +171,7 @@ function buildGrid() {
       + '</div></div>';
   }
   seasonGrid.innerHTML = sh;
-  seasonGrid.className = 'grid' + (count === 1 ? ' single' : '');
+  seasonGrid.className = 'grid seasons' + (count === 1 ? ' single' : '');
 
   if (!isNextYear) {
     var url = base + '/' + y + '/series.json';
@@ -177,10 +182,9 @@ function buildGrid() {
       + '<button class=\"btn btn-copy\" onclick=\"copyUrl(\'' + url + '\')\">Copy URL</button>'
       + '<button class=\"btn btn-new\" onclick=\"copyUrl(\'' + urlNew + '\')\">New only</button>'
       + '</div></div>';
-    yearGrid.className = 'grid';
+    yearGrid.className = 'grid year';
   } else {
     yearGrid.innerHTML = '';
-    yearGrid.className = 'grid';
   }
 }
 
