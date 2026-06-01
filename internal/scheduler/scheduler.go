@@ -78,7 +78,11 @@ func (s *Scheduler) Prewarm(ctx context.Context) error {
 	for _, year := range s.cfg.PrewarmYears {
 		for _, season := range s.cfg.PrewarmSeasons {
 			for _, category := range []string{"series", "series-new"} {
-				if s.cache.Exists(season, year, category) {
+				exists, err := s.cache.Exists(season, year, category)
+				if err != nil {
+					slog.Warn("prewarm exists check failed", "season", season, "year", year, "category", category, "error", err)
+				}
+				if exists {
 					continue
 				}
 				slog.Info("prewarming", "season", season, "year", year, "category", category)
@@ -94,10 +98,16 @@ func (s *Scheduler) Refresh(ctx context.Context, season string, year int, catego
 }
 
 func (s *Scheduler) FetchAndStore(ctx context.Context, season string, year int, category string) error {
-	if s.cache.Exists(season, year, category) {
+	exists, err := s.cache.Exists(season, year, category)
+	if err != nil {
+		slog.Warn("exists check failed", "season", season, "year", year, "category", category, "error", err)
+	}
+	if exists {
 		return nil
 	}
-	s.cache.SetEmpty(season, year, category)
+	if err := s.cache.SetEmpty(season, year, category); err != nil {
+		slog.Warn("set empty failed", "season", season, "year", year, "category", category, "error", err)
+	}
 
 	// Coalesce concurrent triggers for the same key. The singleflight call
 	// blocks all but the first caller until refresh returns, so we run it

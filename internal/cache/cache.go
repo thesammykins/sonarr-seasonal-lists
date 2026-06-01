@@ -73,19 +73,19 @@ func (c *Cache) Close() error {
 	return c.db.Close()
 }
 
-func (c *Cache) Get(season string, year int, category string) (data []byte, fresh bool, isPending bool, ok bool) {
+func (c *Cache) Get(season string, year int, category string) (data []byte, fresh bool, isPending bool, ok bool, err error) {
 	var raw []byte
 	var isEmpty int
 	var fetchedAt int64
 
-	err := c.db.QueryRow(
+	rowErr := c.db.QueryRow(
 		`SELECT data, is_empty, fetched_at FROM season_cache WHERE season=? AND year=? AND category=?`,
 		season, year, category,
 	).Scan(&raw, &isEmpty, &fetchedAt)
 
-	if err != nil {
+	if rowErr != nil {
 		misses++
-		return nil, false, false, false
+		return nil, false, false, false, nil
 	}
 
 	// If the entry is still pending (SetEmpty, no successful Set yet) and
@@ -101,24 +101,28 @@ func (c *Cache) Get(season string, year int, category string) (data []byte, fres
 			// fall through and return as pending; the row is still there
 		} else {
 			misses++
-			return nil, false, false, false
+			return nil, false, false, false, nil
 		}
 	}
 
 	hits++
 
-	// Update last_hit
-	c.db.Exec(
+	// Update last_hit. Surface the error to the caller rather than silently
+	// dropping it: a flaky DB that stops updating last_hit will cause
+	// PruneStale to evict entries the user is still requesting.
+	if _, updateErr := c.db.Exec(
 		`UPDATE season_cache SET last_hit=? WHERE season=? AND year=? AND category=?`,
 		time.Now().Unix(), season, year, category,
-	)
+	); updateErr != nil {
+		return nil, false, false, false, fmt.Errorf("update last_hit: %w", updateErr)
+	}
 
 	if isEmpty == 1 {
-		return nil, false, true, true
+		return nil, false, true, true, nil
 	}
 
 	fresh = time.Since(time.Unix(fetchedAt, 0)) < 24*time.Hour
-	return raw, fresh, false, true
+	return raw, fresh, false, true, nil
 }
 
 func (c *Cache) Set(season string, year int, category string, data []byte) error {
@@ -192,17 +196,21 @@ func (c *Cache) NeedsRefresh(currentYear int, currentRefreshDays, pastRefreshDay
 	return keys, rows.Err()
 }
 
-func (c *Cache) Exists(season string, year int, category string) bool {
+func (c *Cache) Exists(season string, year int, category string) (bool, error) {
 	var count int
-	c.db.QueryRow(
+	if err := c.db.QueryRow(
 		`SELECT COUNT(*) FROM season_cache WHERE season=? AND year=? AND category=?`,
 		season, year, category,
-	).Scan(&count)
-	return count > 0
+	).Scan(&count); err != nil {
+		return false, err
+	}
+	return count > 0, nil
 }
 
-func (c *Cache) Stats() CacheStats {
+func (c *Cache) Stats() (CacheStats, error) {
 	stats := CacheStats{Hits: hits, Misses: misses}
-	c.db.QueryRow(`SELECT COUNT(*) FROM season_cache`).Scan(&stats.Entries)
-	return stats
+	if err := c.db.QueryRow(`SELECT COUNT(*) FROM season_cache`).Scan(&stats.Entries); err != nil {
+		return stats, err
+	}
+	return stats, nil
 }

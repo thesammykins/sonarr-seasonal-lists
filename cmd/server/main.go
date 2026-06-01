@@ -105,7 +105,13 @@ func handleList(db *cache.Cache, sched *scheduler.Scheduler, cfg *config.Config)
 			category = "series"
 		}
 
-		data, _, isPending, ok := db.Get(season, year, category)
+		data, _, isPending, ok, err := db.Get(season, year, category)
+		if err != nil {
+			slog.Error("cache get failed",
+				"season", season, "year", year, "category", category, "error", err)
+			http.Error(w, "cache error", http.StatusInternalServerError)
+			return
+		}
 		if !ok {
 			slog.Info("cache miss, triggering backfill",
 				"season", season,
@@ -137,9 +143,14 @@ func handleHealth(w http.ResponseWriter, r *http.Request) {
 
 func handleCacheStats(db *cache.Cache) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		stats := db.Stats()
+		stats, err := db.Stats()
+		if err != nil {
+			slog.Error("cache stats failed", "error", err)
+			http.Error(w, "cache error", http.StatusInternalServerError)
+			return
+		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(stats)
+		_ = json.NewEncoder(w).Encode(stats)
 	}
 }
 

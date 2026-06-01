@@ -26,7 +26,10 @@ func TestGetMiss(t *testing.T) {
 	}
 	defer c.Close()
 
-	data, fresh, isPending, ok := c.Get("WINTER", 2026, "series")
+	data, fresh, isPending, ok, err := c.Get("WINTER", 2026, "series")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	if ok {
 		t.Error("expected miss")
 	}
@@ -54,7 +57,10 @@ func TestGet_PendingEntryWithinTimeout_ReturnsPending(t *testing.T) {
 		t.Fatalf("SetEmpty: %v", err)
 	}
 
-	_, fresh, isPending, ok := c.Get("WINTER", 2026, "series")
+	_, fresh, isPending, ok, err := c.Get("WINTER", 2026, "series")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	if !ok {
 		t.Fatal("expected hit for fresh pending entry")
 	}
@@ -88,7 +94,10 @@ func TestGet_PendingEntryOlderThanTimeout_EvictsAndReturnsMiss(t *testing.T) {
 		t.Fatalf("backdate: %v", err)
 	}
 
-	_, _, isPending, ok := c.Get("WINTER", 2026, "series")
+	_, _, isPending, ok, err := c.Get("WINTER", 2026, "series")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	if ok {
 		t.Error("expected miss for stuck pending entry")
 	}
@@ -97,7 +106,11 @@ func TestGet_PendingEntryOlderThanTimeout_EvictsAndReturnsMiss(t *testing.T) {
 	}
 
 	// Row should be gone so the next FetchAndStore kicks off a fresh refresh.
-	if c.Exists("WINTER", 2026, "series") {
+	exists, err := c.Exists("WINTER", 2026, "series")
+	if err != nil {
+		t.Fatalf("Exists: %v", err)
+	}
+	if exists {
 		t.Error("expected stuck pending row to be evicted")
 	}
 }
@@ -115,7 +128,10 @@ func TestSetEmptyAndGet(t *testing.T) {
 		t.Fatalf("SetEmpty: %v", err)
 	}
 
-	data, fresh, isPending, ok := c.Get("WINTER", 2026, "series")
+	data, fresh, isPending, ok, err := c.Get("WINTER", 2026, "series")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	if !ok {
 		t.Fatal("expected hit after SetEmpty")
 	}
@@ -144,7 +160,10 @@ func TestSetAndGet(t *testing.T) {
 		t.Fatalf("Set: %v", err)
 	}
 
-	data, fresh, isPending, ok := c.Get("SPRING", 2026, "series")
+	data, fresh, isPending, ok, err := c.Get("SPRING", 2026, "series")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	if !ok {
 		t.Fatal("expected hit after Set")
 	}
@@ -173,7 +192,10 @@ func TestSetOverwritesEmpty(t *testing.T) {
 	showData := []byte(`[{"tvdbId":99999,"title":"Real Show"}]`)
 	c.Set("WINTER", 2026, "series", showData)
 
-	data, fresh, isPending, ok := c.Get("WINTER", 2026, "series")
+	data, fresh, isPending, ok, err := c.Get("WINTER", 2026, "series")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	if !ok {
 		t.Fatal("expected hit")
 	}
@@ -250,14 +272,39 @@ func TestExists(t *testing.T) {
 	}
 	defer c.Close()
 
-	if c.Exists("WINTER", 2026, "series") {
+	exists, err := c.Exists("WINTER", 2026, "series")
+	if err != nil {
+		t.Fatalf("Exists: %v", err)
+	}
+	if exists {
 		t.Error("expected false before Set")
 	}
 
 	c.SetEmpty("WINTER", 2026, "series")
 
-	if !c.Exists("WINTER", 2026, "series") {
+	exists, err = c.Exists("WINTER", 2026, "series")
+	if err != nil {
+		t.Fatalf("Exists: %v", err)
+	}
+	if !exists {
 		t.Error("expected true after SetEmpty")
+	}
+}
+
+func TestExists_DbClosed_ReturnsError(t *testing.T) {
+	t.Parallel()
+
+	c, err := Open(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := c.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = c.Exists("WINTER", 2026, "series")
+	if err == nil {
+		t.Error("expected error from closed DB")
 	}
 }
 
@@ -272,8 +319,28 @@ func TestStats(t *testing.T) {
 	c.Set("SPRING", 2026, "series", []byte(`[{"tvdbId":2}]`))
 	c.Get("WINTER", 2026, "series")
 
-	stats := c.Stats()
+	stats, err := c.Stats()
+	if err != nil {
+		t.Fatalf("Stats: %v", err)
+	}
 	if stats.Entries != 2 {
 		t.Errorf("entries = %d, want 2", stats.Entries)
+	}
+}
+
+func TestStats_DbClosed_ReturnsError(t *testing.T) {
+	t.Parallel()
+
+	c, err := Open(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := c.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = c.Stats()
+	if err == nil {
+		t.Error("expected error from closed DB")
 	}
 }
