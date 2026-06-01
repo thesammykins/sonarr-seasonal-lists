@@ -9,6 +9,7 @@ import (
 
 type Config struct {
 	Port               int
+	StatsAddr          string
 	PrewarmYears       []int
 	PrewarmSeasons     []string
 	MaxPerSeason       int
@@ -83,17 +84,18 @@ func (c *Config) AheadMonthsOrDefault() int {
 // Load reads configuration from environment variables.
 func Load() *Config {
 	cfg := &Config{
-		Port:               getEnvInt("PORT", DefaultPort),
-		MaxPerSeason:       getEnvInt("MAX_PER_SEASON", DefaultMaxPerSeason),
-		IncludeONA:         getEnvBool("ALG_ANILIST_INCLUDE_ONA", false),
-		WinterOverflow:     getEnvBool("ALG_ANILIST_WINTER_OVERFLOW", true),
-		CacheDBPath:        getEnvStr("CACHE_DB_PATH", DefaultCacheDBPath),
-		CacheStaleDays:     getEnvInt("CACHE_STALE_DAYS", DefaultCacheStaleDays),
-		RefreshCurrentDays: getEnvInt("REFRESH_CURRENT_DAYS", DefaultRefreshCurrentDays),
-		RefreshPastDays:    getEnvInt("REFRESH_PAST_DAYS", DefaultRefreshPastDays),
+		Port:                 getEnvInt("PORT", DefaultPort),
+		StatsAddr:            getEnvStr("STATS_ADDR", ""),
+		MaxPerSeason:         getEnvInt("MAX_PER_SEASON", DefaultMaxPerSeason),
+		IncludeONA:           getEnvBool("ALG_ANILIST_INCLUDE_ONA", false),
+		WinterOverflow:       getEnvBool("ALG_ANILIST_WINTER_OVERFLOW", true),
+		CacheDBPath:          getEnvStr("CACHE_DB_PATH", DefaultCacheDBPath),
+		CacheStaleDays:       getEnvInt("CACHE_STALE_DAYS", DefaultCacheStaleDays),
+		RefreshCurrentDays:   getEnvInt("REFRESH_CURRENT_DAYS", DefaultRefreshCurrentDays),
+		RefreshPastDays:      getEnvInt("REFRESH_PAST_DAYS", DefaultRefreshPastDays),
 		CommunityMappingPath: getEnvStr("COMMUNITY_MAPPING_PATH", DefaultCommunityMappingPath),
-		AniListTimeoutMin:   getEnvInt("ALG_ANILIST_TIMEOUT_MINUTES", DefaultAniListTimeoutMin),
-		LogLevel:            getEnvStr("LOG_LEVEL", "info"),
+		AniListTimeoutMin:    getEnvInt("ALG_ANILIST_TIMEOUT_MINUTES", DefaultAniListTimeoutMin),
+		LogLevel:             getEnvStr("LOG_LEVEL", "info"),
 	}
 
 	cfg.PrewarmYears = parseYearList("PREWARM_YEARS", []int{time.Now().Year()})

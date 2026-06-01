@@ -36,6 +36,7 @@ All via environment variables:
 | Variable | Default | Purpose |
 |----------|---------|---------|
 | `PORT` | `8080` | HTTP listen port |
+| `STATS_ADDR` | _(empty)_ | Optional bind address for `/cache/stats` (e.g. `127.0.0.1:9090`). When empty, the endpoint is not exposed. |
 | `PREWARM_YEARS` | current year | CSV years to fetch at startup |
 | `PREWARM_SEASONS` | `all` | CSV seasons: `winter,spring,summer,fall` |
 | `MAX_PER_SEASON` | `100` | Max shows per season |

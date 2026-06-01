@@ -32,6 +32,7 @@ func run() error {
 
 	slog.Info("starting sonarr-seasonal",
 		"port", cfg.Port,
+		"stats_addr", cfg.StatsAddr,
 		"prewarm_years", cfg.PrewarmYears,
 		"prewarm_seasons", cfg.PrewarmSeasons,
 	)
@@ -50,7 +51,6 @@ func run() error {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/list", handleList(db, sched, cfg))
 	mux.HandleFunc("/health", handleHealth)
-	mux.HandleFunc("/cache/stats", handleCacheStats(db))
 
 	server := &http.Server{
 		Addr:         fmt.Sprintf(":%d", cfg.Port),
@@ -60,12 +60,40 @@ func run() error {
 		IdleTimeout:  30 * time.Second,
 	}
 
+	// /cache/stats is only registered on the main mux when STATS_ADDR is
+	// empty (i.e. no separate listener). When STATS_ADDR is set, the
+	// endpoint is bound to that listener instead so it never leaks onto
+	// the Sonarr-facing port.
+	var statsServer *http.Server
+	if cfg.StatsAddr == "" {
+		mux.HandleFunc("/cache/stats", handleCacheStats(db))
+	} else {
+		statsMux := http.NewServeMux()
+		statsMux.HandleFunc("/cache/stats", handleCacheStats(db))
+		statsServer = &http.Server{
+			Addr:         cfg.StatsAddr,
+			Handler:      statsMux,
+			ReadTimeout:  10 * time.Second,
+			WriteTimeout: 10 * time.Second,
+			IdleTimeout:  30 * time.Second,
+		}
+	}
+
 	go func() {
 		slog.Info("listening", "addr", server.Addr)
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			slog.Error("server error", "error", err)
 		}
 	}()
+
+	if statsServer != nil {
+		go func() {
+			slog.Info("stats listening", "addr", statsServer.Addr)
+			if err := statsServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+				slog.Error("stats server error", "error", err)
+			}
+		}()
+	}
 
 	sched.Start(ctx)
 
@@ -79,7 +107,15 @@ func run() error {
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer shutdownCancel()
 
-	return server.Shutdown(shutdownCtx)
+	if err := server.Shutdown(shutdownCtx); err != nil {
+		return err
+	}
+	if statsServer != nil {
+		if err := statsServer.Shutdown(shutdownCtx); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func handleList(db *cache.Cache, sched *scheduler.Scheduler, cfg *config.Config) http.HandlerFunc {

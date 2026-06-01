@@ -103,7 +103,7 @@ func TestAheadMonthsOrDefault(t *testing.T) {
 
 func TestLoad_Defaults(t *testing.T) {
 	for _, key := range []string{
-		"PORT", "MAX_PER_SEASON", "CACHE_DB_PATH", "CACHE_STALE_DAYS",
+		"PORT", "STATS_ADDR", "MAX_PER_SEASON", "CACHE_DB_PATH", "CACHE_STALE_DAYS",
 		"REFRESH_CURRENT_DAYS", "REFRESH_PAST_DAYS", "LOG_LEVEL",
 		"PREWARM_YEARS", "PREWARM_SEASONS", "AHEAD_MONTHS",
 		"ALG_ANILIST_AHEAD_MONTHS", "ALG_ANILIST_TIMEOUT_MINUTES",
@@ -117,6 +117,9 @@ func TestLoad_Defaults(t *testing.T) {
 
 	if cfg.Port != DefaultPort {
 		t.Errorf("Port = %d, want %d", cfg.Port, DefaultPort)
+	}
+	if cfg.StatsAddr != "" {
+		t.Errorf("StatsAddr = %q, want empty (stats listener disabled by default)", cfg.StatsAddr)
 	}
 	if cfg.MaxPerSeason != DefaultMaxPerSeason {
 		t.Errorf("MaxPerSeason = %d, want %d", cfg.MaxPerSeason, DefaultMaxPerSeason)
@@ -146,7 +149,7 @@ func TestLoad_Defaults(t *testing.T) {
 
 func TestLoad_EnvOverrides(t *testing.T) {
 	keys := []string{
-		"PORT", "MAX_PER_SEASON", "CACHE_STALE_DAYS", "REFRESH_CURRENT_DAYS",
+		"PORT", "STATS_ADDR", "MAX_PER_SEASON", "CACHE_STALE_DAYS", "REFRESH_CURRENT_DAYS",
 		"REFRESH_PAST_DAYS", "LOG_LEVEL", "PREWARM_YEARS", "PREWARM_SEASONS",
 		"AHEAD_MONTHS",
 	}
@@ -156,6 +159,7 @@ func TestLoad_EnvOverrides(t *testing.T) {
 	}
 
 	os.Setenv("PORT", "9090")
+	os.Setenv("STATS_ADDR", "127.0.0.1:9091")
 	os.Setenv("MAX_PER_SEASON", "50")
 	os.Setenv("CACHE_STALE_DAYS", "30")
 	os.Setenv("REFRESH_CURRENT_DAYS", "3")
@@ -174,6 +178,9 @@ func TestLoad_EnvOverrides(t *testing.T) {
 
 	if cfg.Port != 9090 {
 		t.Errorf("Port = %d, want 9090", cfg.Port)
+	}
+	if cfg.StatsAddr != "127.0.0.1:9091" {
+		t.Errorf("StatsAddr = %q, want 127.0.0.1:9091", cfg.StatsAddr)
 	}
 	if cfg.MaxPerSeason != 50 {
 		t.Errorf("MaxPerSeason = %d, want 50", cfg.MaxPerSeason)
