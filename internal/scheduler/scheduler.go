@@ -20,7 +20,7 @@ import (
 type Scheduler struct {
 	cache    *cache.Cache
 	cfg      *config.Config
-	client   *anilist.Client
+	client   anilistFetcher
 	resolver *mapping.Resolver
 	sfg      singleflight.Group
 }
@@ -163,9 +163,24 @@ func (s *Scheduler) refresh(ctx context.Context, season string, year int, catego
 		formats = append(formats, "ONA")
 	}
 
+	// Track whether any sub-season's fetch succeeded. If every fetch
+	// failed, leave any existing cache row in place rather than
+	// overwriting good data with an empty array. A legitimately empty
+	// result (e.g. a season with no resolvable shows) still counts as
+	// a success.
+	anySuccess := false
 	for _, ssn := range seasons {
-		shows := s.processSeason(ctx, ssn, year, formats, category)
+		shows, ok := s.processSeason(ctx, ssn, year, formats, category)
+		if ok {
+			anySuccess = true
+		}
 		allShows = append(allShows, shows...)
+	}
+
+	if !anySuccess {
+		slog.Warn("refresh failed for all sub-seasons; keeping existing cache row",
+			"season", season, "year", year, "category", category)
+		return
 	}
 
 	data, err := json.Marshal(allShows)
@@ -182,13 +197,19 @@ func (s *Scheduler) refresh(ctx context.Context, season string, year int, catego
 	slog.Info("cached", "season", season, "year", year, "category", category, "shows", len(allShows))
 }
 
-func (s *Scheduler) processSeason(ctx context.Context, season string, year int, formats []string, category string) []Show {
+// processSeason returns the resolved shows for one sub-season plus a
+// boolean indicating whether the underlying fetch succeeded. ok=false
+// means the fetch itself failed (network, GraphQL error) and the caller
+// should treat the result as unknown. ok=true with an empty slice
+// means the fetch succeeded but no shows survived filtering — a
+// legitimate empty result that should still be cached.
+func (s *Scheduler) processSeason(ctx context.Context, season string, year int, formats []string, category string) ([]Show, bool) {
 	slog.Info("fetching season", "season", season, "year", year)
 
 	shows, err := s.client.FetchSeason(ctx, season, year, s.cfg.MaxPerSeason, formats)
 	if err != nil {
 		slog.Error("fetch failed", "season", season, "year", year, "error", err)
-		return nil
+		return nil, false
 	}
 
 	if s.cfg.WinterOverflow && season == "WINTER" {
@@ -211,7 +232,7 @@ func (s *Scheduler) processSeason(ctx context.Context, season string, year int, 
 	})
 	shows = filter.FilterFuture(shows, s.cfg.AheadMonthsOrDefault())
 
-	return s.resolveShows(shows)
+	return s.resolveShows(shows), true
 }
 
 func (s *Scheduler) fetchWinterOverflow(ctx context.Context, year int, formats []string, shows []anilist.Show) []anilist.Show {

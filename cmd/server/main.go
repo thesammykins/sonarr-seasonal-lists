@@ -2,13 +2,11 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
-	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -48,28 +46,20 @@ func run() error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	mux := http.NewServeMux()
-	mux.HandleFunc("/list", handleList(db, sched, cfg))
-	mux.HandleFunc("/health", handleHealth)
+	h := &Handlers{DB: db, Sched: sched, Cfg: cfg}
 
 	server := &http.Server{
 		Addr:         fmt.Sprintf(":%d", cfg.Port),
-		Handler:      mux,
+		Handler:      h.Mux(),
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 10 * time.Second,
 		IdleTimeout:  30 * time.Second,
 	}
 
-	// /cache/stats is only registered on the main mux when STATS_ADDR is
-	// empty (i.e. no separate listener). When STATS_ADDR is set, the
-	// endpoint is bound to that listener instead so it never leaks onto
-	// the Sonarr-facing port.
+	// Optional second listener for /cache/stats. When STATS_ADDR is empty,
+	// StatsMux returns nil and we skip the second server entirely.
 	var statsServer *http.Server
-	if cfg.StatsAddr == "" {
-		mux.HandleFunc("/cache/stats", handleCacheStats(db))
-	} else {
-		statsMux := http.NewServeMux()
-		statsMux.HandleFunc("/cache/stats", handleCacheStats(db))
+	if statsMux := h.StatsMux(); statsMux != nil {
 		statsServer = &http.Server{
 			Addr:         cfg.StatsAddr,
 			Handler:      statsMux,
@@ -116,83 +106,6 @@ func run() error {
 		}
 	}
 	return nil
-}
-
-func handleList(db *cache.Cache, sched *scheduler.Scheduler, cfg *config.Config) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		season := strings.ToUpper(strings.TrimSpace(r.URL.Query().Get("season")))
-		if season == "" {
-			season = "ALL"
-		}
-
-		yearStr := r.URL.Query().Get("year")
-		year := time.Now().Year()
-		if yearStr != "" {
-			if y, err := strconv.Atoi(yearStr); err == nil && y > 0 {
-				year = y
-			}
-		}
-
-		category := strings.TrimSpace(r.URL.Query().Get("category"))
-		if category == "" {
-			category = "series"
-		}
-		if category != "series" && category != "series-new" {
-			category = "series"
-		}
-
-		data, _, isPending, ok, err := db.Get(season, year, category)
-		if err != nil {
-			slog.Error("cache get failed",
-				"season", season, "year", year, "category", category, "error", err)
-			http.Error(w, "cache error", http.StatusInternalServerError)
-			return
-		}
-		if !ok {
-			slog.Info("cache miss, triggering backfill",
-				"season", season,
-				"year", year,
-				"category", category,
-			)
-
-			if err := sched.FetchAndStore(r.Context(), season, year, category); err != nil {
-				slog.Error("trigger backfill failed", "error", err)
-			}
-
-			writeJSON(w, []byte("[]"))
-			return
-		}
-
-		if isPending {
-			writeJSON(w, []byte("[]"))
-			return
-		}
-
-		writeJSON(w, data)
-	}
-}
-
-func handleHealth(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	w.Write([]byte(`{"status":"ok"}`))
-}
-
-func handleCacheStats(db *cache.Cache) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		stats, err := db.Stats()
-		if err != nil {
-			slog.Error("cache stats failed", "error", err)
-			http.Error(w, "cache error", http.StatusInternalServerError)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(stats)
-	}
-}
-
-func writeJSON(w http.ResponseWriter, data []byte) {
-	w.Header().Set("Content-Type", "application/json")
-	w.Write(data)
 }
 
 func setupLogging(level string) {
