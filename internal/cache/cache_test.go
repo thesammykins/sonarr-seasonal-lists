@@ -2,6 +2,7 @@ package cache
 
 import (
 	"testing"
+	"time"
 )
 
 func TestOpenAndClose(t *testing.T) {
@@ -37,6 +38,67 @@ func TestGetMiss(t *testing.T) {
 	}
 	if isPending {
 		t.Error("expected not pending on miss")
+	}
+}
+
+func TestGet_PendingEntryWithinTimeout_ReturnsPending(t *testing.T) {
+	t.Parallel()
+
+	c, err := Open(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.Close()
+
+	if err := c.SetEmpty("WINTER", 2026, "series"); err != nil {
+		t.Fatalf("SetEmpty: %v", err)
+	}
+
+	_, fresh, isPending, ok := c.Get("WINTER", 2026, "series")
+	if !ok {
+		t.Fatal("expected hit for fresh pending entry")
+	}
+	if isPending != true {
+		t.Error("expected isPending true for fresh pending entry")
+	}
+	if fresh {
+		t.Error("expected not fresh for pending entry")
+	}
+}
+
+func TestGet_PendingEntryOlderThanTimeout_EvictsAndReturnsMiss(t *testing.T) {
+	t.Parallel()
+
+	c, err := Open(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.Close()
+
+	if err := c.SetEmpty("WINTER", 2026, "series"); err != nil {
+		t.Fatalf("SetEmpty: %v", err)
+	}
+
+	// Backdate fetched_at past the recovery timeout.
+	old := time.Now().Add(-2 * DefaultPendingTimeout).Unix()
+	if _, err := c.db.Exec(
+		`UPDATE season_cache SET fetched_at=? WHERE season=? AND year=? AND category=?`,
+		old, "WINTER", 2026, "series",
+	); err != nil {
+		t.Fatalf("backdate: %v", err)
+	}
+
+	_, _, isPending, ok := c.Get("WINTER", 2026, "series")
+	if ok {
+		t.Error("expected miss for stuck pending entry")
+	}
+	if isPending {
+		t.Error("expected isPending false for evicted entry")
+	}
+
+	// Row should be gone so the next FetchAndStore kicks off a fresh refresh.
+	if c.Exists("WINTER", 2026, "series") {
+		t.Error("expected stuck pending row to be evicted")
 	}
 }
 

@@ -3,6 +3,7 @@ package cache
 import (
 	"database/sql"
 	"fmt"
+	"log/slog"
 	"time"
 
 	_ "modernc.org/sqlite"
@@ -23,6 +24,13 @@ type CacheStats struct {
 	Hits    int64
 	Misses  int64
 }
+
+// DefaultPendingTimeout is how long a SetEmpty row can sit in the cache
+// before Get evicts it and returns a miss, so the handler re-triggers a
+// fresh refresh instead of returning [] forever. 30 minutes is long enough
+// to ride out a brief AniList outage and short enough that one bad refresh
+// does not pin Sonarr to empty lists for hours.
+const DefaultPendingTimeout = 30 * time.Minute
 
 var (
 	hits   int64
@@ -78,6 +86,23 @@ func (c *Cache) Get(season string, year int, category string) (data []byte, fres
 	if err != nil {
 		misses++
 		return nil, false, false, false
+	}
+
+	// If the entry is still pending (SetEmpty, no successful Set yet) and
+	// has been pending longer than the recovery timeout, evict it so the
+	// caller re-triggers a fresh refresh instead of returning [] forever.
+	if isEmpty == 1 && time.Since(time.Unix(fetchedAt, 0)) > DefaultPendingTimeout {
+		if _, delErr := c.db.Exec(
+			`DELETE FROM season_cache WHERE season=? AND year=? AND category=?`,
+			season, year, category,
+		); delErr != nil {
+			slog.Warn("evict stuck pending entry failed",
+				"season", season, "year", year, "category", category, "error", delErr)
+			// fall through and return as pending; the row is still there
+		} else {
+			misses++
+			return nil, false, false, false
+		}
 	}
 
 	hits++
