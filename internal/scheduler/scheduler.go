@@ -13,6 +13,7 @@ import (
 	"github.com/calmcacil/anilistgen/internal/filter"
 	"github.com/calmcacil/anilistgen/internal/jitter"
 	"github.com/calmcacil/anilistgen/internal/mapping"
+	"golang.org/x/sync/errgroup"
 	"golang.org/x/sync/singleflight"
 )
 
@@ -52,6 +53,11 @@ func (s *Scheduler) loadResolver() {
 // ticks. Jitter is applied at each iteration via the jitter package.
 const schedulerInterval = 10 * time.Minute
 
+// prewarmConcurrency caps how many AniList refreshes run in parallel
+// during startup prewarm. AniList's free tier is roughly 30 requests per
+// minute; 3 concurrent requests stays well under that.
+const prewarmConcurrency = 3
+
 func (s *Scheduler) Start(ctx context.Context) {
 	go func() {
 		s.loadResolver()
@@ -87,6 +93,9 @@ func (s *Scheduler) runRefreshLoop(ctx context.Context) {
 }
 
 func (s *Scheduler) Prewarm(ctx context.Context) error {
+	sem := make(chan struct{}, prewarmConcurrency)
+	g, gctx := errgroup.WithContext(ctx)
+
 	for _, year := range s.cfg.PrewarmYears {
 		for _, season := range s.cfg.PrewarmSeasons {
 			for _, category := range []string{"series", "series-new"} {
@@ -97,12 +106,20 @@ func (s *Scheduler) Prewarm(ctx context.Context) error {
 				if exists {
 					continue
 				}
-				slog.Info("prewarming", "season", season, "year", year, "category", category)
-				s.refresh(ctx, season, year, category)
+				season, year, category := season, year, category
+				sem <- struct{}{}
+				g.Go(func() error {
+					defer func() { <-sem }()
+					slog.Info("prewarming", "season", season, "year", year, "category", category)
+					s.refresh(gctx, season, year, category)
+					// refresh logs its own errors and updates the cache; we
+					// never want one bad season to abort the rest of prewarm.
+					return nil
+				})
 			}
 		}
 	}
-	return nil
+	return g.Wait()
 }
 
 func (s *Scheduler) Refresh(ctx context.Context, season string, year int, category string) {
