@@ -4,13 +4,16 @@ import (
 	"database/sql"
 	"fmt"
 	"log/slog"
+	"sync/atomic"
 	"time"
 
 	_ "modernc.org/sqlite"
 )
 
 type Cache struct {
-	db *sql.DB
+	db     *sql.DB
+	hits   atomic.Int64
+	misses atomic.Int64
 }
 
 type CacheKey struct {
@@ -31,11 +34,6 @@ type CacheStats struct {
 // to ride out a brief AniList outage and short enough that one bad refresh
 // does not pin Sonarr to empty lists for hours.
 const DefaultPendingTimeout = 30 * time.Minute
-
-var (
-	hits   int64
-	misses int64
-)
 
 func Open(path string) (*Cache, error) {
 	db, err := sql.Open("sqlite", path)
@@ -84,7 +82,7 @@ func (c *Cache) Get(season string, year int, category string) (data []byte, fres
 	).Scan(&raw, &isEmpty, &fetchedAt)
 
 	if rowErr != nil {
-		misses++
+		c.misses.Add(1)
 		return nil, false, false, false, nil
 	}
 
@@ -100,12 +98,12 @@ func (c *Cache) Get(season string, year int, category string) (data []byte, fres
 				"season", season, "year", year, "category", category, "error", delErr)
 			// fall through and return as pending; the row is still there
 		} else {
-			misses++
+			c.misses.Add(1)
 			return nil, false, false, false, nil
 		}
 	}
 
-	hits++
+	c.hits.Add(1)
 
 	// Update last_hit. Surface the error to the caller rather than silently
 	// dropping it: a flaky DB that stops updating last_hit will cause
@@ -208,7 +206,7 @@ func (c *Cache) Exists(season string, year int, category string) (bool, error) {
 }
 
 func (c *Cache) Stats() (CacheStats, error) {
-	stats := CacheStats{Hits: hits, Misses: misses}
+	stats := CacheStats{Hits: c.hits.Load(), Misses: c.misses.Load()}
 	if err := c.db.QueryRow(`SELECT COUNT(*) FROM season_cache`).Scan(&stats.Entries); err != nil {
 		return stats, err
 	}

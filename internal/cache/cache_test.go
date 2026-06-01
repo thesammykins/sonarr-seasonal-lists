@@ -1,6 +1,7 @@
 package cache
 
 import (
+	"sync"
 	"testing"
 	"time"
 )
@@ -342,5 +343,41 @@ func TestStats_DbClosed_ReturnsError(t *testing.T) {
 	_, err = c.Stats()
 	if err == nil {
 		t.Error("expected error from closed DB")
+	}
+}
+
+func TestStats_ConcurrentGet_CountsCorrectly(t *testing.T) {
+	t.Parallel()
+
+	c, err := Open(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.Close()
+
+	if err := c.Set("WINTER", 2026, "series", []byte(`[]`)); err != nil {
+		t.Fatal(err)
+	}
+
+	const goroutines = 100
+	var wg sync.WaitGroup
+	wg.Add(goroutines)
+	for range goroutines {
+		go func() {
+			defer wg.Done()
+			_, _, _, _, _ = c.Get("WINTER", 2026, "series")
+		}()
+	}
+	wg.Wait()
+
+	stats, err := c.Stats()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stats.Hits != goroutines {
+		t.Errorf("Hits = %d, want %d", stats.Hits, goroutines)
+	}
+	if stats.Misses != 0 {
+		t.Errorf("Misses = %d, want 0", stats.Misses)
 	}
 }
