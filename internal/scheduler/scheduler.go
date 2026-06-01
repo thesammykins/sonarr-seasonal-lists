@@ -3,6 +3,7 @@ package scheduler
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"time"
 
@@ -11,6 +12,7 @@ import (
 	"github.com/calmcacil/anilistgen/internal/config"
 	"github.com/calmcacil/anilistgen/internal/filter"
 	"github.com/calmcacil/anilistgen/internal/mapping"
+	"golang.org/x/sync/singleflight"
 )
 
 type Scheduler struct {
@@ -18,6 +20,7 @@ type Scheduler struct {
 	cfg      *config.Config
 	client   *anilist.Client
 	resolver *mapping.Resolver
+	sfg      singleflight.Group
 }
 
 type Show struct {
@@ -95,7 +98,17 @@ func (s *Scheduler) FetchAndStore(ctx context.Context, season string, year int, 
 		return nil
 	}
 	s.cache.SetEmpty(season, year, category)
-	go s.refresh(context.WithoutCancel(ctx), season, year, category)
+
+	// Coalesce concurrent triggers for the same key. The singleflight call
+	// blocks all but the first caller until refresh returns, so we run it
+	// inline rather than spawning a goroutine per request. Detach the
+	// context so a Sonarr request being cancelled does not abort the
+	// in-flight refresh.
+	key := fmt.Sprintf("%s|%d|%s", season, year, category)
+	_, _, _ = s.sfg.Do(key, func() (any, error) {
+		s.refresh(context.WithoutCancel(ctx), season, year, category)
+		return nil, nil
+	})
 	return nil
 }
 
