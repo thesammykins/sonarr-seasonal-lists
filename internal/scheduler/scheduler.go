@@ -11,6 +11,7 @@ import (
 	"github.com/calmcacil/anilistgen/internal/cache"
 	"github.com/calmcacil/anilistgen/internal/config"
 	"github.com/calmcacil/anilistgen/internal/filter"
+	"github.com/calmcacil/anilistgen/internal/jitter"
 	"github.com/calmcacil/anilistgen/internal/mapping"
 	"golang.org/x/sync/singleflight"
 )
@@ -47,6 +48,10 @@ func (s *Scheduler) loadResolver() {
 	s.resolver = mapping.NewResolver(cm)
 }
 
+// schedulerInterval is the base interval between stale-entry refresh
+// ticks. Jitter is applied at each iteration via the jitter package.
+const schedulerInterval = 10 * time.Minute
+
 func (s *Scheduler) Start(ctx context.Context) {
 	go func() {
 		s.loadResolver()
@@ -59,19 +64,26 @@ func (s *Scheduler) Start(ctx context.Context) {
 	}()
 
 	go func() {
-		ticker := time.NewTicker(10 * time.Minute)
-		defer ticker.Stop()
-
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-ticker.C:
-				s.refreshStale(ctx)
-				s.prune(ctx)
-			}
-		}
+		s.runRefreshLoop(ctx)
 	}()
+}
+
+// runRefreshLoop is the background ticker that refreshes stale entries and
+// prunes cold ones. Each iteration is jittered by ±25% to prevent
+// co-deployed replicas from stampeding the upstream API.
+func (s *Scheduler) runRefreshLoop(ctx context.Context) {
+	for {
+		wait := jitter.Jitter(schedulerInterval)
+		timer := time.NewTimer(wait)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return
+		case <-timer.C:
+			s.refreshStale(ctx)
+			s.prune(ctx)
+		}
+	}
 }
 
 func (s *Scheduler) Prewarm(ctx context.Context) error {

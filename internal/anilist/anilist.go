@@ -7,11 +7,12 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"math/rand/v2"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/calmcacil/anilistgen/internal/jitter"
 )
 
 const (
@@ -213,16 +214,6 @@ func New() *Client {
 	}
 }
 
-// jitter returns d randomly varied by ±25% to prevent synchronized retry storms.
-func jitter(d time.Duration) time.Duration {
-	if d <= 0 {
-		return d
-	}
-	quarter := d / 4
-	offset := time.Duration(rand.Int64N(int64(2*quarter + 1))) - quarter
-	return d + offset
-}
-
 // throttle ensures we don't exceed AniList rate limits.
 // After a 429 response, backs off to 5s for 30 seconds.
 func (c *Client) throttle() {
@@ -230,7 +221,7 @@ func (c *Client) throttle() {
 	if time.Since(c.lastRateLimit) < 30*time.Second {
 		minDelay = rateLimitBackoff
 	}
-	minDelay = jitter(minDelay)
+	minDelay = jitter.Jitter(minDelay)
 	elapsed := time.Since(c.lastCall)
 	if elapsed < minDelay {
 		time.Sleep(minDelay - elapsed)
@@ -347,7 +338,7 @@ func (c *Client) doRequest(ctx context.Context, payload []byte, dst any) error {
 	for attempt := range maxRetry {
 		if attempt > 0 {
 			// Exponential backoff: 2s, 4s, 8s, 16s (+ jitter)
-			time.Sleep(jitter(time.Duration(1<<attempt) * time.Second))
+			time.Sleep(jitter.Jitter(time.Duration(1<<attempt) * time.Second))
 		}
 
 		req, err := http.NewRequestWithContext(ctx, http.MethodPost, apiBase,
