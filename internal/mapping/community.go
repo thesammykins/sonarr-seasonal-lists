@@ -46,9 +46,9 @@ func LoadCommunityMapping(path string) (*CommunityMapping, error) {
 		if err != nil {
 			return nil, fmt.Errorf("read community mapping response: %w", err)
 		}
-		if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 			slog.Warn("could not create mapping directory", "path", filepath.Dir(path), "error", err)
-		} else if err := os.WriteFile(path, data, 0600); err != nil {
+		} else if err := os.WriteFile(path, data, 0o600); err != nil {
 			slog.Warn("could not cache mapping file", "path", path, "error", err)
 		}
 	}

@@ -96,7 +96,7 @@ func TestFilterFuture_RemovesFutureShows(t *testing.T) {
 		{StartDate: anilist.FuzzyDate{Year: makePtr(2020), Month: makePtr(1)}},
 	}
 
-	result := FilterFuture(shows, 3)
+	result := Future(shows, 3)
 	if len(result) != 1 {
 		t.Fatalf("expected 1 show within range, got %d", len(result))
 	}
@@ -109,7 +109,7 @@ func TestFilterFuture_NoLimit(t *testing.T) {
 		{StartDate: anilist.FuzzyDate{Year: makePtr(2099), Month: makePtr(12)}},
 	}
 
-	result := FilterFuture(shows, 0)
+	result := Future(shows, 0)
 	if len(result) != 1 {
 		t.Errorf("expected 1 show when months=0, got %d", len(result))
 	}

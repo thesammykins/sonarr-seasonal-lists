@@ -16,11 +16,11 @@ import (
 )
 
 const (
-	apiBase           = "https://graphql.anilist.co"
-	maxRetry          = 5
-	rateLimitDelay    = 700 * time.Millisecond
-	rateLimitBackoff  = 5 * time.Second
-	maxPerPage        = 50
+	apiBase          = "https://graphql.anilist.co"
+	maxRetry         = 5
+	rateLimitDelay   = 700 * time.Millisecond
+	rateLimitBackoff = 5 * time.Second
+	maxPerPage       = 50
 )
 
 // Tag represents an AniList content tag with name and relevance rank.
@@ -89,9 +89,8 @@ func (s Show) SkipByDuration() bool {
 // HasTag returns true if the show has a tag matching the given name
 // (case-insensitive).
 func (s Show) HasTag(name string) bool {
-	lower := strings.ToLower(name)
 	for _, t := range s.Tags {
-		if strings.ToLower(t.Name) == lower {
+		if strings.EqualFold(t.Name, name) {
 			return true
 		}
 	}
@@ -202,9 +201,9 @@ type graphqlResponse struct {
 
 // Client fetches data from the AniList GraphQL API.
 type Client struct {
-	http           *http.Client
-	lastCall       time.Time
-	lastRateLimit  time.Time
+	http          *http.Client
+	lastCall      time.Time
+	lastRateLimit time.Time
 }
 
 // New creates a new AniList client.
@@ -231,7 +230,7 @@ func (c *Client) throttle() {
 
 // FetchSeason returns anime for the given season, year, and formats.
 // Results are capped at maxResults. Paginates through AniList's 50-per-page limit.
-func (c *Client) FetchSeason(ctx context.Context, season string, year int, maxResults int, formats []string) ([]Show, error) {
+func (c *Client) FetchSeason(ctx context.Context, season string, year, maxResults int, formats []string) ([]Show, error) {
 
 	perPage := maxPerPage
 	if maxResults > 0 && maxResults < perPage {

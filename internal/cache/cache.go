@@ -7,6 +7,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	// modernc.org/sqlite registers the "sqlite" driver with database/sql.
 	_ "modernc.org/sqlite"
 )
 
@@ -16,13 +17,13 @@ type Cache struct {
 	misses atomic.Int64
 }
 
-type CacheKey struct {
+type Key struct {
 	Season   string
 	Year     int
 	Category string
 }
 
-type CacheStats struct {
+type Stats struct {
 	Entries int
 	Hits    int64
 	Misses  int64
@@ -71,7 +72,7 @@ func (c *Cache) Close() error {
 	return c.db.Close()
 }
 
-func (c *Cache) Get(season string, year int, category string) (data []byte, fresh bool, isPending bool, ok bool, err error) {
+func (c *Cache) Get(season string, year int, category string) (data []byte, fresh, isPending, ok bool, err error) {
 	var raw []byte
 	var isEmpty int
 	var fetchedAt int64
@@ -90,17 +91,17 @@ func (c *Cache) Get(season string, year int, category string) (data []byte, fres
 	// has been pending longer than the recovery timeout, evict it so the
 	// caller re-triggers a fresh refresh instead of returning [] forever.
 	if isEmpty == 1 && time.Since(time.Unix(fetchedAt, 0)) > DefaultPendingTimeout {
-		if _, delErr := c.db.Exec(
+		_, delErr := c.db.Exec(
 			`DELETE FROM season_cache WHERE season=? AND year=? AND category=?`,
 			season, year, category,
-		); delErr != nil {
-			slog.Warn("evict stuck pending entry failed",
-				"season", season, "year", year, "category", category, "error", delErr)
-			// fall through and return as pending; the row is still there
-		} else {
+		)
+		if delErr == nil {
 			c.misses.Add(1)
 			return nil, false, false, false, nil
 		}
+		slog.Warn("evict stuck pending entry failed",
+			"season", season, "year", year, "category", category, "error", delErr)
+		// fall through and return as pending; the row is still there
 	}
 
 	c.hits.Add(1)
@@ -164,18 +165,18 @@ func (c *Cache) PruneStale(staleDays int) (int, error) {
 	return int(n), nil
 }
 
-func (c *Cache) NeedsRefresh(currentYear int, currentRefreshDays, pastRefreshDays int) ([]CacheKey, error) {
+func (c *Cache) NeedsRefresh(currentYear, currentRefreshDays, pastRefreshDays int) ([]Key, error) {
 	rows, err := c.db.Query(`SELECT season, year, category, fetched_at FROM season_cache WHERE is_empty = 0`)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	var keys []CacheKey
+	var keys []Key
 	now := time.Now()
 
 	for rows.Next() {
-		var key CacheKey
+		var key Key
 		var fetchedAt int64
 		if err := rows.Scan(&key.Season, &key.Year, &key.Category, &fetchedAt); err != nil {
 			return nil, err
@@ -205,8 +206,8 @@ func (c *Cache) Exists(season string, year int, category string) (bool, error) {
 	return count > 0, nil
 }
 
-func (c *Cache) Stats() (CacheStats, error) {
-	stats := CacheStats{Hits: c.hits.Load(), Misses: c.misses.Load()}
+func (c *Cache) Stats() (Stats, error) {
+	stats := Stats{Hits: c.hits.Load(), Misses: c.misses.Load()}
 	if err := c.db.QueryRow(`SELECT COUNT(*) FROM season_cache`).Scan(&stats.Entries); err != nil {
 		return stats, err
 	}

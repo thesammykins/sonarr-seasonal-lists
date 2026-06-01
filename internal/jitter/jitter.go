@@ -15,6 +15,6 @@ func Jitter(d time.Duration) time.Duration {
 		return d
 	}
 	quarter := d / 4
-	offset := time.Duration(rand.Int64N(int64(2*quarter + 1))) - quarter
+	offset := time.Duration(rand.Int64N(int64(2*quarter+1))) - quarter
 	return d + offset
 }

@@ -243,7 +243,7 @@ func TestHandlers_CacheStats(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200", rec.Code)
 	}
-	var stats cache.CacheStats
+	var stats cache.Stats
 	if err := json.NewDecoder(rec.Body).Decode(&stats); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
@@ -384,7 +384,7 @@ func TestStubFetcher_ConcurrentSafe(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			f.FetchAndStore(context.Background(), "WINTER", 2026, "series")
+			_ = f.FetchAndStore(context.Background(), "WINTER", 2026, "series")
 			hits.Add(1)
 		}()
 	}

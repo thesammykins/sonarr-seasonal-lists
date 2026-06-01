@@ -8,15 +8,15 @@ import (
 )
 
 type Config struct {
-	Port               int
-	StatsAddr          string
-	PrewarmYears       []int
-	PrewarmSeasons     []string
-	MaxPerSeason       int
-	IncludeONA         bool
-	WinterOverflow     bool
-	AheadMonths        *int
-	ExcludeTags        []string
+	Port                 int
+	StatsAddr            string
+	PrewarmYears         []int
+	PrewarmSeasons       []string
+	MaxPerSeason         int
+	IncludeONA           bool
+	WinterOverflow       bool
+	AheadMonths          *int
+	ExcludeTags          []string
 	CommunityMappingPath string
 	CacheDBPath          string
 	CacheStaleDays       int
@@ -27,12 +27,12 @@ type Config struct {
 }
 
 const (
-	DefaultPort               = 8080
-	DefaultMaxPerSeason       = 100
-	DefaultCacheDBPath        = "/data/cache.db"
-	DefaultCacheStaleDays     = 14
-	DefaultRefreshCurrentDays = 7
-	DefaultRefreshPastDays    = 30
+	DefaultPort                 = 8080
+	DefaultMaxPerSeason         = 100
+	DefaultCacheDBPath          = "/data/cache.db"
+	DefaultCacheStaleDays       = 14
+	DefaultRefreshCurrentDays   = 7
+	DefaultRefreshPastDays      = 30
 	DefaultCommunityMappingPath = "/data/tvdb-mal.yaml"
 	DefaultAniListTimeoutMin    = 10
 )

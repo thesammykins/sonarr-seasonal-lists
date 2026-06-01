@@ -230,7 +230,7 @@ func (s *Scheduler) processSeason(ctx context.Context, season string, year int, 
 		Blacklist:   nil,
 		ExcludeTags: s.cfg.ExcludeTags,
 	})
-	shows = filter.FilterFuture(shows, s.cfg.AheadMonthsOrDefault())
+	shows = filter.Future(shows, s.cfg.AheadMonthsOrDefault())
 
 	return s.resolveShows(shows), true
 }
@@ -292,7 +292,7 @@ func (s *Scheduler) refreshStale(ctx context.Context) {
 	}
 }
 
-func (s *Scheduler) prune(ctx context.Context) {
+func (s *Scheduler) prune(_ context.Context) {
 	n, err := s.cache.PruneStale(s.cfg.CacheStaleDays)
 	if err != nil {
 		slog.Error("prune failed", "error", err)

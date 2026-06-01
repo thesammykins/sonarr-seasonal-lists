@@ -188,10 +188,14 @@ func TestSetOverwritesEmpty(t *testing.T) {
 	}
 	defer c.Close()
 
-	c.SetEmpty("WINTER", 2026, "series")
+	if err := c.SetEmpty("WINTER", 2026, "series"); err != nil {
+		t.Fatalf("SetEmpty: %v", err)
+	}
 
 	showData := []byte(`[{"tvdbId":99999,"title":"Real Show"}]`)
-	c.Set("WINTER", 2026, "series", showData)
+	if err := c.Set("WINTER", 2026, "series", showData); err != nil {
+		t.Fatalf("Set: %v", err)
+	}
 
 	data, fresh, isPending, ok, err := c.Get("WINTER", 2026, "series")
 	if err != nil {
@@ -220,8 +224,12 @@ func TestPruneStale(t *testing.T) {
 	}
 	defer c.Close()
 
-	c.Set("WINTER", 2020, "series", []byte(`[]`))
-	c.Set("SPRING", 2020, "series", []byte(`[]`))
+	if err := c.Set("WINTER", 2020, "series", []byte(`[]`)); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.Set("SPRING", 2020, "series", []byte(`[]`)); err != nil {
+		t.Fatal(err)
+	}
 
 	n, err := c.PruneStale(365)
 	if err != nil {
@@ -232,7 +240,9 @@ func TestPruneStale(t *testing.T) {
 	}
 
 	// Manually set last_hit far in the past to test pruning
-	c.db.Exec(`UPDATE season_cache SET last_hit = 0`)
+	if _, err := c.db.Exec(`UPDATE season_cache SET last_hit = 0`); err != nil {
+		t.Fatal(err)
+	}
 	n, err = c.PruneStale(1)
 	if err != nil {
 		t.Fatalf("PruneStale: %v", err)
@@ -251,8 +261,12 @@ func TestNeedsRefresh(t *testing.T) {
 	}
 	defer c.Close()
 
-	c.Set("WINTER", 2020, "series", []byte(`[]`))
-	c.Set("SPRING", 2026, "series", []byte(`[]`))
+	if err := c.Set("WINTER", 2020, "series", []byte(`[]`)); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.Set("SPRING", 2026, "series", []byte(`[]`)); err != nil {
+		t.Fatal(err)
+	}
 
 	// Entries just created should NOT need refresh
 	keys, err := c.NeedsRefresh(2026, 7, 30)
@@ -281,7 +295,9 @@ func TestExists(t *testing.T) {
 		t.Error("expected false before Set")
 	}
 
-	c.SetEmpty("WINTER", 2026, "series")
+	if err := c.SetEmpty("WINTER", 2026, "series"); err != nil {
+		t.Fatal(err)
+	}
 
 	exists, err = c.Exists("WINTER", 2026, "series")
 	if err != nil {
@@ -316,9 +332,15 @@ func TestStats(t *testing.T) {
 	}
 	defer c.Close()
 
-	c.Set("WINTER", 2026, "series", []byte(`[{"tvdbId":1}]`))
-	c.Set("SPRING", 2026, "series", []byte(`[{"tvdbId":2}]`))
-	c.Get("WINTER", 2026, "series")
+	if err := c.Set("WINTER", 2026, "series", []byte(`[{"tvdbId":1}]`)); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.Set("SPRING", 2026, "series", []byte(`[{"tvdbId":2}]`)); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, _, _, err := c.Get("WINTER", 2026, "series"); err != nil {
+		t.Fatal(err)
+	}
 
 	stats, err := c.Stats()
 	if err != nil {

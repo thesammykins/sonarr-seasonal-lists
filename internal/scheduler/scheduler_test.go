@@ -19,11 +19,10 @@ import (
 // scheduler called it. Optionally sleeps before returning so tests can
 // verify parallelisation or singleflight coalescing.
 type stubFetcher struct {
-	mu     sync.Mutex
-	calls  int32
-	shows  []anilist.Show
-	err    error
-	sleep  time.Duration
+	calls int32
+	shows []anilist.Show
+	err   error
+	sleep time.Duration
 }
 
 func (s *stubFetcher) FetchSeason(_ context.Context, _ string, _ int, _ int, _ []string) ([]anilist.Show, error) {
